@@ -169,6 +169,7 @@ static void edit_params(u32 argc, char** argv) {
   }
 	cc_params[cc_par_cnt++] = alloc_printf("-include%s/llvm_mode/afl-rt.h", obj_path);
   cc_params[cc_par_cnt++] = "-D_USE_IJON";
+  // cc_params[cc_par_cnt++] = "`pkg-config --cflags --libs glib-2.0`";
   //cc_params[cc_par_cnt++] = "-includeafl-rt.h";
 #endif /* ^USE_TRACE_PC */
 
@@ -365,6 +366,8 @@ static void edit_params(u32 argc, char** argv) {
 
 int main(int argc, char** argv) {
 
+
+
   if (isatty(2) && !getenv("AFL_QUIET")) {
 
 #ifdef USE_TRACE_PC
@@ -376,6 +379,10 @@ int main(int argc, char** argv) {
   }
 
   if (argc < 2) {
+
+    SAYF("Hello from the Fuzzboys!\n");
+    SAYF("Hello from the Fuzzboys!\n");
+
 
     SAYF("\n"
          "This is a helper application for afl-fuzz. It serves as a drop-in replacement\n"
