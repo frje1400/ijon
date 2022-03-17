@@ -38,8 +38,6 @@
 #include <stddef.h>
 #include <execinfo.h>
 
-#include <glib.h>
-
 /* This is a somewhat ugly hack for the experimental 'trace-pc-guard' mode.
    Basically, we need to make sure that the forkserver is initialized after
    the LLVM-generated runtime initialization pass, not before. */
@@ -50,11 +48,12 @@
 #  define CONST_PRIO 0
 #endif /* ^USE_TRACE_PC */
 
-static GHashTable* ht_with_ints;
-
 /* Globals needed by the injected instrumentation. The __afl_area_initial region
    is used for instrumentation output before __afl_map_shm() has a chance to run.
    It will end up as .comm, so it shouldn't be too wasteful. */
+
+extern int x;
+extern uint32_t hash_vals[];
 
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
@@ -97,53 +96,8 @@ void ijon_map_inc(uint32_t addr){
 }
 
 void ijon_map_set(uint32_t addr){
-    // FILE* f = fopen("output.txt", "a");
-    // fprintf(f, "working with ht: %p\n", ht_with_ints);
-    // fclose(f);
-  
-
-  // if (ht_with_ints == NULL) {
-  //     ht_with_ints = g_hash_table_new(g_int_hash, g_int_equal);
-  //     FILE* f = fopen("output.txt", "a");
-  //     fprintf(f, "created new hashmap\n");
-  //     fclose(f);
-  // }
-
-  int in_ht = g_hash_table_contains(ht_with_ints, &addr);
-  FILE* f = fopen("output.txt", "a");
-  fprintf(f, "contains %u: %d\n", addr, in_ht);
-  fclose(f);
-
-  if (!g_hash_table_contains(ht_with_ints, &addr)) {
-    
-    // iterator.
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init (&iter, ht_with_ints);
-    FILE* f = fopen("output.txt", "a");
-    while (g_hash_table_iter_next (&iter, &key, &value)) 
-    {
-        fprintf(f, "%u -> %u\n", *((uint32_t*) key), *((uint32_t*) value));
-    }
-
-    uint32_t* i = g_malloc(sizeof(uint32_t));
-    *i = addr;
-    g_hash_table_insert(ht_with_ints, i, i);
-
-    uint32_t size = g_hash_table_size(ht_with_ints);
-    f = fopen("output.txt", "a");
-    fprintf(f, "new int: %u,  size: %u\n", addr, size);
-    fclose(f);
-  }
-
   __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]|=1;
 }
-
-// void print_to_file(char* filename, char* output) {
-//     FILE* f = fopen(filename, "a");
-//     fprintf(f, output);
-//     fclose(f);
-// }
 
 uint32_t ijon_strdist(char* a,char* b){
   int i = 0;
@@ -424,12 +378,6 @@ void __afl_manual_init(void) {
 /* Proper initialization routine. */
 
 __attribute__((constructor(CONST_PRIO))) void __afl_auto_init(void) {
-  ht_with_ints = g_hash_table_new(g_int_hash, g_int_equal);
-
-  FILE* f = fopen("output.txt", "a");
-  fprintf(f, "created new ht in afl_auto_init\n");
-  fclose(f);
-
   is_persistent = !!getenv(PERSIST_ENV_VAR);
 
   if (getenv(DEFER_ENV_VAR)) return;
