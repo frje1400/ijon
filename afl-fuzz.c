@@ -34,7 +34,6 @@
 #include "afl-ijon-min.h"
 
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -47,6 +46,7 @@
 #include <dlfcn.h>
 #include <sched.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include <sys/wait.h>
 #include <sys/time.h>
@@ -7832,6 +7832,74 @@ static void save_cmdline(u32 argc, char** argv) {
 /* Main entry point */
 
 int main(int argc, char** argv) {
+  /*  fuzzboys defning shared memory.
+  
+      oflags:
+        O_CREAT: creates shared memory if it doesn't exist.
+                if the memory already exists in /dev/shm it just opens.
+        O_RDWR:  open in read/write mode.
+        O_TRUNC: truncates the memory to size 0. This is used because if
+                have already run the fuzzing once after starting the OS,
+                /dev/shm/fuzzboys already exists and contains data from
+                the old run.
+      
+      mode flags:
+        S_IRWXU: gives read/write/execute permissions to the current user.
+  */
+  int fb_shared_mem = shm_open("/fuzzboys", O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
+  if (fb_shared_mem == -1) {
+    FATAL("Couldn't initialize fb_shared_mem.");
+  }
+
+  /*  After creating shared memory object you normally call ftruncate() to
+      set the size before calling mmap().
+
+      first argument to ftruncate is the file descriptor returned by shm_open.
+      second argument is the size in bytes.
+  */
+  int FB_SHARED_MEM_SIZE = 8192;
+  int truncate_success = ftruncate(fb_shared_mem, FB_SHARED_MEM_SIZE);
+  if (truncate_success == -1) {
+    FATAL("Something went wrong with ftruncate.");
+  }
+
+  /*  To use the memory, we need to use mmap.
+
+      arguments:
+      1) NULL which lets the kernel choose the address.
+      2) size (matching the shared memory size defined above)
+      3) flags: PROT_READ | PROT_WRITE lets you read and write to the memory.
+      4) There are different kinds of memory mapping. MAP_SHARED means that
+      changes to the memory are visible to other processes. Updates are not
+      guaranteed to be immediate: see msync().
+      5) the file descriptor from shm_open.
+      6) offset: you might be able to not start at the beginning (probably irrelevant for our use case).
+  */
+  void* fb_shm_addr = mmap(NULL, FB_SHARED_MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fb_shared_mem, 0);
+  if (fb_shm_addr == MAP_FAILED) {
+    FATAL("mmap failed.");
+  }
+
+  if (flock(fb_shared_mem, LOCK_EX) != 0) {
+    FATAL("Locking error.");
+  }
+
+  uint32_t* nums = (uint32_t*) fb_shm_addr;
+  for (int i = 0; i < 101; i++) {
+    nums[i] = 0;
+  }
+
+  if(flock(fb_shared_mem, LOCK_UN) != 0) {
+    FATAL("Unlocking error.");
+  }
+
+  // memcpy(addr, "hello from the fuzzboys.\n", 100);
+
+  // int msync_success = msync(addr, FB_SHARED_MEM_SIZE, MS_SYNC);
+
+  // FATAL("experiment over.");
+
+
 
   s32 opt;
   u64 prev_queued = 0;
@@ -8221,6 +8289,29 @@ stop_fuzzing:
   alloc_report();
 
   OKF("We're done here. Have a nice day!\n");
+
+  /* fuzzboys printing.
+
+  Try printing shared memory after run...
+  */
+
+
+  if (flock(fb_shared_mem, LOCK_EX) != 0) {
+    FATAL("Locking error.");
+  }
+
+  int count = 0;
+  for (int i = 0; i < 100; i++) {
+    if (nums[i] != 0) {
+      count++;
+    }
+  }
+
+  OKF("Visited %d states!", count);
+
+  if(flock(fb_shared_mem, LOCK_UN) != 0) {
+    FATAL("Unlocking error.");
+  }
 
   exit(0);
 

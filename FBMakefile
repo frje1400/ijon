@@ -1,0 +1,4 @@
+all:
+	make
+	cd llvm_mode && export LLVM_CONFIG=~/fuzzing/llvm-project/build/bin/llvm-config && export CC=~/fuzzing/llvm-project/build/bin/clang-6.0 && make
+	cd .. & ./afl-clang-fast++ -o maze ../maze/maze.cpp

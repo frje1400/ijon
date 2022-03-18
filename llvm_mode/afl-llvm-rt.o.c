@@ -21,6 +21,7 @@
 
 #include "../config.h"
 #include "../types.h"
+#include "../debug.h"
 #include "afl-rt.h"
 
 #include <stdio.h>
@@ -29,14 +30,19 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#include <fcntl.h>
 
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 
 #include <stddef.h>
 #include <execinfo.h>
+
+
 
 /* This is a somewhat ugly hack for the experimental 'trace-pc-guard' mode.
    Basically, we need to make sure that the forkserver is initialized after
@@ -95,7 +101,36 @@ void ijon_map_inc(uint32_t addr){
   __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]+=1;
 }
 
+int fb_get_file_desc() {
+  return shm_open("/fuzzboys", O_RDWR, S_IRWXU);
+}
+
+void* fb_get_shared_mem(int fd) {
+  int FB_SHARED_MEM_SIZE = 8192;
+  void* addr = mmap(NULL, FB_SHARED_MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  return addr; 
+}
+
 void ijon_map_set(uint32_t addr){
+  int fd = fb_get_file_desc();
+  flock(fd, LOCK_EX);
+
+  void* shm_addr = fb_get_shared_mem(fd);
+  uint32_t* shm_uint = (uint32_t*) shm_addr;
+  
+  for (int i = 0; i < 100; i++) {
+    if (shm_uint[i] == addr) {
+      // addr has already been seen.
+      break;
+    } else if (shm_uint[i] == 0) {
+      // empty slot, insert.
+      shm_uint[i] = addr;
+      break;
+    } 
+  }
+
+  flock(fd, LOCK_UN);
+
   __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]|=1;
 }
 
