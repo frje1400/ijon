@@ -26,6 +26,8 @@
 #define _GNU_SOURCE
 #define _FILE_OFFSET_BITS 64
 
+#define FB_SHARED_MEM_SIZE 8192
+
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -7829,11 +7831,9 @@ static void save_cmdline(u32 argc, char** argv) {
 
 #ifndef AFL_LIB
 
-/* Main entry point */
 
-int main(int argc, char** argv) {
-  /*  fuzzboys defning shared memory.
-  
+int fb_create_shared_mem(char* mem_name) {
+  /* 
       oflags:
         O_CREAT: creates shared memory if it doesn't exist.
                 if the memory already exists in /dev/shm it just opens.
@@ -7846,7 +7846,7 @@ int main(int argc, char** argv) {
       mode flags:
         S_IRWXU: gives read/write/execute permissions to the current user.
   */
-  int fb_shared_mem = shm_open("/fuzzboys", O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
+  int fb_shared_mem = shm_open(mem_name, O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
   if (fb_shared_mem == -1) {
     FATAL("Couldn't initialize fb_shared_mem.");
   }
@@ -7857,13 +7857,16 @@ int main(int argc, char** argv) {
       first argument to ftruncate is the file descriptor returned by shm_open.
       second argument is the size in bytes.
   */
-  int FB_SHARED_MEM_SIZE = 8192;
   int truncate_success = ftruncate(fb_shared_mem, FB_SHARED_MEM_SIZE);
   if (truncate_success == -1) {
     FATAL("Something went wrong with ftruncate.");
   }
 
-  /*  To use the memory, we need to use mmap.
+  return fb_shared_mem;
+}
+
+void* fb_initialize_shared_mem(int fd) {
+   /*  To use the memory, we need to use mmap.
 
       arguments:
       1) NULL which lets the kernel choose the address.
@@ -7875,12 +7878,12 @@ int main(int argc, char** argv) {
       5) the file descriptor from shm_open.
       6) offset: you might be able to not start at the beginning (probably irrelevant for our use case).
   */
-  void* fb_shm_addr = mmap(NULL, FB_SHARED_MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fb_shared_mem, 0);
+  void* fb_shm_addr = mmap(NULL, FB_SHARED_MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (fb_shm_addr == MAP_FAILED) {
     FATAL("mmap failed.");
   }
 
-  if (flock(fb_shared_mem, LOCK_EX) != 0) {
+  if (flock(fd, LOCK_EX) != 0) {
     FATAL("Locking error.");
   }
 
@@ -7889,16 +7892,40 @@ int main(int argc, char** argv) {
     nums[i] = 0;
   }
 
-  if(flock(fb_shared_mem, LOCK_UN) != 0) {
+  if(flock(fd, LOCK_UN) != 0) {
     FATAL("Unlocking error.");
   }
 
-  // memcpy(addr, "hello from the fuzzboys.\n", 100);
+  return fb_shm_addr;
+}
 
-  // int msync_success = msync(addr, FB_SHARED_MEM_SIZE, MS_SYNC);
+int fb_count_states(void* shared_mem, int fd) {
+  if (flock(fd, LOCK_EX) != 0) {
+    FATAL("Locking error.");
+  }
 
-  // FATAL("experiment over.");
+  uint32_t* nums = (uint32_t*) shared_mem;
 
+  int count = 0;
+  for (int i = 0; i < 100; i++) {
+    if(nums[i] != 0) {
+      count++;
+    }
+  }
+
+  if(flock(fd, LOCK_UN) != 0) {
+    FATAL("Unlocking error.");
+  }
+
+  return count;
+}
+
+
+/* Main entry point */
+
+int main(int argc, char** argv) {
+  int shared_mem_fd = fb_create_shared_mem("/fuzzboys");
+  void* fb_shared_mem = fb_initialize_shared_mem(shared_mem_fd);
 
 
   s32 opt;
@@ -8290,28 +8317,10 @@ stop_fuzzing:
 
   OKF("We're done here. Have a nice day!\n");
 
-  /* fuzzboys printing.
-
-  Try printing shared memory after run...
-  */
-
-
-  if (flock(fb_shared_mem, LOCK_EX) != 0) {
-    FATAL("Locking error.");
-  }
-
-  int count = 0;
-  for (int i = 0; i < 100; i++) {
-    if (nums[i] != 0) {
-      count++;
-    }
-  }
-
+  /* fuzzboys printing.  */
+  int count = fb_count_states(fb_shared_mem, shared_mem_fd);
   OKF("Visited %d states!", count);
 
-  if(flock(fb_shared_mem, LOCK_UN) != 0) {
-    FATAL("Unlocking error.");
-  }
 
   exit(0);
 

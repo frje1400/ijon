@@ -113,6 +113,8 @@ void* fb_get_shared_mem(int fd) {
 
 void ijon_map_set(uint32_t addr){
   int fd = fb_get_file_desc();
+  
+  // Lock
   flock(fd, LOCK_EX);
 
   void* shm_addr = fb_get_shared_mem(fd);
@@ -129,6 +131,9 @@ void ijon_map_set(uint32_t addr){
     } 
   }
 
+  // msync may or may not be necessary here.
+
+  // Unlock.
   flock(fd, LOCK_UN);
 
   __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]|=1;
