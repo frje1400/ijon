@@ -7949,9 +7949,13 @@ int main(int argc, char** argv) {
   gettimeofday(&tv, &tz);
   srandom(tv.tv_sec ^ tv.tv_usec ^ getpid());
 
-  while ((opt = getopt(argc, argv, "+i:o:f:m:t:T:dnCB:S:M:x:Q")) > 0)
+  while ((opt = getopt(argc, argv, "+N:i:o:f:m:t:T:dnCB:S:M:x:Q")) > 0)
 
     switch (opt) {
+      case 'N': /* number of states */
+        char* nbr_of_states = optarg;
+        FATAL("nbr of states: %s", nbr_of_states);  // testing that it works, and quits.
+        break;
 
       case 'i': /* input dir */
 
