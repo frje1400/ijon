@@ -83,6 +83,7 @@
 /* Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
 
+double     n_states;                  /* No. of states exp. in app.       */
 
 EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *out_file,                  /* File to fuzz, if any             */
@@ -4295,12 +4296,18 @@ static void show_stats(void) {
 
   }
 
+  int counted_states = fb_count_states(fb_shared_mem, fb_fd);
+
   SAYF(bV bSTOP "        trim : " cRST "%-37s " bSTG bVR bH20 bH2 bH2 bRB "\n"
        bVR bH cCYA bSTOP " state information " bSTG bH30 bH2 bH bRB bSTOP "\n", tmp);
   
   SAYF(bSTG bV bSTOP " visited states : " cRST "%i " bSTOP "\n", fb_count_states(fb_shared_mem, fb_fd));
 
-  SAYF(bSTG bV bSTOP " %c of states visited : " cRST "%i " bSTOP "\n", 37, 0); /* Change 0 to visited_states / expected states * 100 */
+  SAYF(bSTG bV bSTOP " expected states : " cRST "%.0f " bSTOP "\n", n_states);
+
+  SAYF(bSTG bV bSTOP " %c of states visited : " cRST " %.0f%c" bSTOP "\n", 37, (counted_states / n_states * 100), 37);
+
+
 
   /* Provide some CPU utilization stats. */
 
@@ -7958,7 +7965,8 @@ int main(int argc, char** argv) {
     switch (opt) {
       case 'N': /* number of states */
         char* nbr_of_states = optarg;
-        FATAL("nbr of states: %s", nbr_of_states);  // testing that it works, and quits.
+        n_states = atoi(nbr_of_states);
+        //FATAL("nbr of states: %s", nbr_of_states);  // testing that it works, and quits.
         break;
 
       case 'i': /* input dir */
