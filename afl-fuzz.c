@@ -4296,7 +4296,11 @@ static void show_stats(void) {
   }
 
   SAYF(bV bSTOP "        trim : " cRST "%-37s " bSTG bVR bH20 bH2 bH2 bRB "\n"
-       bLB bH30 bH20 bH2 bH bRB bSTOP cRST RESET_G1, tmp);
+       bVR bH cCYA bSTOP " state information " bSTG bH30 bH2 bH bRB bSTOP "\n", tmp);
+  
+  SAYF(bSTG bV bSTOP " visited states : " cRST "%i " bSTOP "\n", fb_count_states(fb_shared_mem, fb_fd));
+
+  SAYF(bSTG bV bSTOP " %c of states visited : " cRST "%i " bSTOP "\n", 37, 0); /* Change 0 to visited_states / expected states * 100 */
 
   /* Provide some CPU utilization stats. */
 
