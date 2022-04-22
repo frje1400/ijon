@@ -60,6 +60,8 @@
 #include <sys/ioctl.h>
 #include <sys/file.h>
 
+#include "path_type.h"
+
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined (__OpenBSD__)
 #  include <sys/sysctl.h>
 #endif /* __APPLE__ || __FreeBSD__ || __OpenBSD__ */
@@ -334,6 +336,10 @@ enum {
 /* State coverage global variables. */
 int fb_fd;
 void* fb_shared_mem;
+
+int path_info_fd;
+void* fb_shared_path_info;
+
 
 
 /* Get unix time in milliseconds */
@@ -7915,6 +7921,46 @@ void fb_create_shared_mem() {
   }
 }
 
+
+ void fb_create_path_mem() {
+  int fd = shm_open("/pathinfo", O_CREAT | O_RDWR | O_TRUNC, S_IRWXU);
+  if (fd == -1) {
+    FATAL("Couldn't initialize fb_create_path_mem.");
+  }
+
+  // set global shared memory file descriptor.
+  path_info_fd = fd;
+
+  int truncate_success = ftruncate(fd, FB_SHARED_MEM_SIZE);
+  if (truncate_success == -1) {
+    FATAL("Something went wrong with ftruncate.");
+  }
+
+  void* fb_shm_addr = mmap(NULL, FB_SHARED_MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (fb_shm_addr == MAP_FAILED) {
+    FATAL("mmap failed.");
+  }
+
+  // set global shared memory pointer.
+  fb_shared_path_info = fb_shm_addr;
+
+  // initialize the memory.
+  if (flock(fd, LOCK_EX) != 0) {
+    FATAL("Locking error.");
+  }
+
+  // initialize path info memory if necessary.
+  PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
+  for (int i = 0; i < 100; i++) {
+     PathInfo pi = { .state = 0, .length = 0};
+     pi_ptr[i] = pi;
+  }
+
+  if(flock(fd, LOCK_UN) != 0) {
+    FATAL("Unlocking error.");
+  } 
+ }
+
 int fb_count_states(void* shared_mem, int fd) {
   if (flock(fd, LOCK_EX) != 0) {
     FATAL("Locking error.");
@@ -7957,6 +8003,15 @@ void print_states(void* shared_mem, int fd) {
 
 int main(int argc, char** argv) {
   fb_create_shared_mem();
+  fb_create_path_mem();
+
+  // PathInfo pi = { .state = 1, .length = 123, .path = "hejhej" };
+
+  // PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
+  // pi_ptr[2] = pi;
+
+  // FATAL("state: %d, length: %d, path: %s", pi_ptr[2].state, pi_ptr[2].length, pi_ptr[2].path);
+
 
   s32 opt;
   u64 prev_queued = 0;
@@ -8354,6 +8409,12 @@ stop_fuzzing:
   /* fuzzboys printing.  */
   int count = fb_count_states(fb_shared_mem, fb_fd);
   OKF("Visited %d states!", count);
+
+
+  PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
+  for (int i = 0; i < 10; i++) {
+    SAYF("state: %d, length: %d, path: %s\n", pi_ptr[i].state, pi_ptr[i].length, pi_ptr[i].path);
+  }
 
 
   exit(0);

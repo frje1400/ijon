@@ -23,6 +23,7 @@
 #include "../types.h"
 #include "../debug.h"
 #include "afl-rt.h"
+#include "../path_type.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,8 +102,8 @@ void ijon_map_inc(uint32_t addr){
   __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]+=1;
 }
 
-int fb_get_file_desc() {
-  return shm_open("/fuzzboys", O_RDWR, S_IRWXU);
+int fb_get_file_desc(char* name) {
+  return shm_open(name, O_RDWR, S_IRWXU);
 }
 
 void* fb_get_shared_mem(int fd) {
@@ -111,8 +112,52 @@ void* fb_get_shared_mem(int fd) {
   return addr; 
 }
 
+void state_path(int state, char* path) {
+  IJON_SET(ijon_simple_hash(state));
+
+  int fd = fb_get_file_desc("/pathinfo");
+  void* mem_ptr = fb_get_shared_mem(fd);
+  PathInfo* path_info = (PathInfo*) mem_ptr;
+
+  int path_length = strlen(path);
+  if (path_length > 50) {
+    // Path length is higher than 50 which means that it won't fit into the
+    // PathInfo struct.
+    return;
+  }
+
+  // Lock
+  flock(fd, LOCK_EX);
+
+  int current_length = path_info[state].length;
+
+  if (current_length == 0) {
+    // Length the first time we see a path.
+    for (int i = 0; i <= path_length; i++) {
+      // path_info[state].path[i] = path[i];
+      strcpy(path_info[state].path, path);
+      path_info[state].length = path_length;
+      path_info[state].state = state;
+    }
+
+  } else {
+    // We've already stored something.
+    if (path_length < current_length) {
+      // new path is shorter than currently saved path.
+      strcpy(path_info[state].path, path);
+      path_info[state].length = path_length;
+      path_info[state].state = state;
+    } 
+  }
+
+  msync(mem_ptr, 8192, MS_SYNC);
+  flock(fd, LOCK_UN);
+  // Unlock
+
+}
+
 void ijon_map_set(uint32_t addr){
-  int fd = fb_get_file_desc();
+  int fd = fb_get_file_desc("/fuzzboys");
   
   // Lock
   flock(fd, LOCK_EX);
@@ -131,7 +176,7 @@ void ijon_map_set(uint32_t addr){
     } 
   }
 
-  msync(addr, 8192, MS_SYNC);
+  msync(shm_addr, 8192, MS_SYNC);
 
   // Unlock.
   flock(fd, LOCK_UN);
