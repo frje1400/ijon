@@ -131,7 +131,7 @@ void ijon_map_set(uint32_t addr){
     } 
   }
 
-  // msync may or may not be necessary here.
+  msync(addr, 8192, MS_SYNC);
 
   // Unlock.
   flock(fd, LOCK_UN);

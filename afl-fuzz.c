@@ -7936,6 +7936,22 @@ int fb_count_states(void* shared_mem, int fd) {
   return count;
 }
 
+void print_states(void* shared_mem, int fd) {
+  if (flock(fd, LOCK_EX) != 0) {
+    FATAL("Locking error.");
+  }
+
+  uint32_t* nums = (uint32_t*) shared_mem;
+
+  for (int i = 0; i < 100; i++) {
+    SAYF("state: %u\n", nums[i]);
+  }
+
+  if(flock(fd, LOCK_UN) != 0) {
+    FATAL("Unlocking error.");
+  }
+}
+
 
 /* Main entry point */
 
@@ -7966,7 +7982,6 @@ int main(int argc, char** argv) {
       case 'N': /* number of states */
         char* nbr_of_states = optarg;
         n_states = atoi(nbr_of_states);
-        //FATAL("nbr of states: %s", nbr_of_states);  // testing that it works, and quits.
         break;
 
       case 'i': /* input dir */
