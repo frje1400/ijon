@@ -112,14 +112,14 @@ void* fb_get_shared_mem(int fd) {
   return addr; 
 }
 
-void state_path(int state, char* path) {
+void state_path(int state, const char* path) {
   IJON_SET(ijon_simple_hash(state));
 
   int fd = fb_get_file_desc("/pathinfo");
   void* mem_ptr = fb_get_shared_mem(fd);
   PathInfo* path_info = (PathInfo*) mem_ptr;
 
-  int path_length = strlen(path);
+  size_t path_length = strlen(path);
   if (path_length > 50) {
     // Path length is higher than 50 which means that it won't fit into the
     // PathInfo struct.
@@ -132,22 +132,18 @@ void state_path(int state, char* path) {
   int current_length = path_info[state].length;
 
   if (current_length == 0) {
-    // Length the first time we see a path.
-    for (int i = 0; i <= path_length; i++) {
-      // path_info[state].path[i] = path[i];
       strcpy(path_info[state].path, path);
       path_info[state].length = path_length;
       path_info[state].state = state;
-    }
-
-  } else {
-    // We've already stored something.
-    if (path_length < current_length) {
+  } else if (path_length < current_length) {
       // new path is shorter than currently saved path.
       strcpy(path_info[state].path, path);
       path_info[state].length = path_length;
-      path_info[state].state = state;
-    } 
+      path_info[state].prev_length = current_length;
+  } else {
+      if (path_length > path_info[state].hi_length) {
+        path_info[state].hi_length = path_length;
+      } 
   }
 
   msync(mem_ptr, 8192, MS_SYNC);
