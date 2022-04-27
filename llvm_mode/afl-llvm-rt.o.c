@@ -112,7 +112,7 @@ void* fb_get_shared_mem(int fd) {
   return addr; 
 }
 
-void state_path(int state, const char* path) {
+void state_path(int state, const char* path, int pos) {
   IJON_SET(ijon_simple_hash(state));
 
   int fd = fb_get_file_desc("/pathinfo");
@@ -120,8 +120,8 @@ void state_path(int state, const char* path) {
   PathInfo* path_info = (PathInfo*) mem_ptr;
 
   size_t path_length = strlen(path);
-  if (path_length > 50) {
-    // Path length is higher than 50 which means that it won't fit into the
+  if (path_length > MAX_PATH) {
+    // Path length is higher than MAX_PATH (50) which means that it won't fit into the
     // PathInfo struct.
     return;
   }
@@ -131,20 +131,14 @@ void state_path(int state, const char* path) {
 
   int current_length = path_info[state].length;
 
-  if (current_length == 0) {
-      strcpy(path_info[state].path, path);
+  if (current_length == -1) {
+      strncpy(path_info[state].path, path, pos + 1);
       path_info[state].length = path_length;
       path_info[state].state = state;
   } else if (path_length < current_length) {
-      // new path is shorter than currently saved path.
-      strcpy(path_info[state].path, path);
+      strncpy(path_info[state].path, path, pos + 1);
       path_info[state].length = path_length;
-      path_info[state].prev_length = current_length;
-  } else {
-      if (path_length > path_info[state].hi_length) {
-        path_info[state].hi_length = path_length;
-      } 
-  }
+  } 
 
   msync(mem_ptr, 8192, MS_SYNC);
   flock(fd, LOCK_UN);

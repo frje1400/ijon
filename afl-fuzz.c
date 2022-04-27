@@ -7952,7 +7952,7 @@ void fb_create_shared_mem() {
   // initialize path info memory if necessary.
   PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
   for (int i = 0; i < 100; i++) {
-     PathInfo pi = { .state = 0, .length = 0};
+     PathInfo pi = { .state = 0, .length = -1};
      pi_ptr[i] = pi;
   }
 
@@ -8413,8 +8413,8 @@ stop_fuzzing:
 
   PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
   for (int i = 0; i < 10; i++) {
-    SAYF("state: %d, prev_length: %d, length: %d, hi_len: %d, path: %s\n",
-    pi_ptr[i].state, pi_ptr[i].prev_length, pi_ptr[i].length, pi_ptr[i].hi_length, pi_ptr[i].path);
+    SAYF("state: %d, length: %d, path: %s\n",
+    pi_ptr[i].state, pi_ptr[i].length, pi_ptr[i].path);
   }
 
 

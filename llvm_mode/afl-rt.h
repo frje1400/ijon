@@ -35,7 +35,7 @@ ijon_u32_t ijon_hashint(ijon_u32_t old, ijon_u32_t val);
 ijon_u32_t ijon_hashstr(ijon_u32_t old, char* val);
 ijon_u32_t ijon_hashmem(ijon_u32_t old, char* val, ijon_size_t len);
 
-void state_path(int state, const char* path);
+void state_path(int state, const char* path, int pos);
 
 #ifdef _IJON_CGC
 #define ijon_hashstack() ijon_hashstack_manual()
