@@ -133,10 +133,12 @@ void state_path(int state, const char* path, int pos) {
 
   if (current_length == -1) {
       strncpy(path_info[state].path, path, pos + 1);
+      path_info[state].path[pos+1] = '\0';
       path_info[state].length = path_length;
       path_info[state].state = state;
   } else if (path_length < current_length) {
       strncpy(path_info[state].path, path, pos + 1);
+      path_info[state].path[pos+1] = '\0';
       path_info[state].length = path_length;
   } 
 
