@@ -1,7 +1,7 @@
-const int MAX_PATH = 50;
+const int MAX_PATH = 100;
 
 typedef struct {
     int state;
     int length;
-    char path[50];
+    char path[100];
 } PathInfo;

@@ -112,14 +112,81 @@ void* fb_get_shared_mem(int fd) {
   return addr; 
 }
 
+char* control_char_to_hex[] = {
+  "00", "01", "02", "03", "04", "05", "06", "07",
+  "08", "09", "0A", "0B", "0C", "0D", "0E", "0F",
+  "10", "11", "12", "13", "14", "15", "16", "17",
+  "18", "19", "1A", "1B", "1C", "1D", "1E", "1F"
+};
+
+char* extended_ascii_to_hex[] = {
+  "80", "81", "82", "83", "84", "85", "86", "87", "88",
+  "89", "8A", "8B", "8C", "8D", "8E", "8F", "90", "91",
+  "92", "93", "94", "95", "96", "97", "98", "99", "9A",
+  "9B", "9C", "9D", "9E", "9F", "A0", "A1", "A2", "A3",
+  "A4", "A5", "A6", "A7", "A8", "A9", "AA", "AB", "AC",
+  "AD", "AE", "AF", "B0", "B1", "B2", "B3", "B4", "B5",
+  "B6", "B7", "B8", "B9", "BA", "BB", "BC", "BD", "BE",
+  "BF", "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7",
+  "C8", "C9", "CA", "CB", "CC", "CD", "CE", "CF", "D0",
+  "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9",
+  "DA", "DB", "DC", "DD", "DE", "DF", "E0", "E1", "E2",
+  "E3", "E4", "E5", "E6", "E7", "E8", "E9", "EA", "EB",
+  "EC", "ED", "EE", "EF", "F0", "F1", "F2", "F3", "F4",
+  "F5", "F6", "F7", "F8", "F9", "FA", "FB", "FC", "FD",
+  "FE", "FF",
+};
+
+char* escape_path(const char* path, int length) {
+  // the maximum possible length of the new path is
+  // length*4 if all chars are in the 0-31 range.
+  char* escaped_path = malloc(length * 4 * sizeof(char));
+
+  int pos_in_dest = 0;
+  for (int i = 0 ; i < length; i++) {
+    uint8_t curr_val = path[i];
+
+    if (curr_val <= 31) {
+      char* hex_val = control_char_to_hex[curr_val];
+      escaped_path[pos_in_dest] = '\\';
+      escaped_path[pos_in_dest + 1] = 'x';
+      escaped_path[pos_in_dest + 2] = hex_val[0];
+      escaped_path[pos_in_dest + 3] = hex_val[1];
+      pos_in_dest += 4;
+    } else if (curr_val == 92) {
+      // The character is a backslash that needs to be escaped.
+      escaped_path[pos_in_dest] = '\\';
+      escaped_path[pos_in_dest + 1] = '\\';
+      pos_in_dest += 2;
+    } else if (curr_val <= 127) {
+      // Just a normal character, no special handling.
+      escaped_path[pos_in_dest] = curr_val;
+      pos_in_dest++;
+    } else {
+      // Above 127, escape with \x.
+      char* hex_val = extended_ascii_to_hex[curr_val - 128];
+      escaped_path[pos_in_dest] = '\\';
+      escaped_path[pos_in_dest + 1] = 'x';
+      escaped_path[pos_in_dest + 2] = hex_val[0];
+      escaped_path[pos_in_dest + 3] = hex_val[1];
+      pos_in_dest += 4;
+    } 
+  }
+
+  escaped_path[pos_in_dest] = '\0';
+
+  return escaped_path;
+}
+
 void state_path(int state, const char* path, int pos) {
   IJON_SET(ijon_simple_hash(state));
-
   int fd = fb_get_file_desc("/pathinfo");
   void* mem_ptr = fb_get_shared_mem(fd);
   PathInfo* path_info = (PathInfo*) mem_ptr;
+  size_t original_length = pos + 1;
 
-  size_t path_length = strlen(path);
+  char* escaped_path = escape_path(path, pos + 1);
+  size_t path_length = strlen(escaped_path);
   if (path_length > MAX_PATH) {
     // Path length is higher than MAX_PATH (50) which means that it won't fit into the
     // PathInfo struct.
@@ -132,14 +199,14 @@ void state_path(int state, const char* path, int pos) {
   int current_length = path_info[state].length;
 
   if (current_length == -1) {
-      strncpy(path_info[state].path, path, pos + 1);
-      path_info[state].path[pos+1] = '\0';
-      path_info[state].length = path_length;
+      strncpy(path_info[state].path, escaped_path, path_length);
+      path_info[state].path[path_length] = '\0';
+      path_info[state].length = original_length;
       path_info[state].state = state;
-  } else if (path_length < current_length) {
-      strncpy(path_info[state].path, path, pos + 1);
-      path_info[state].path[pos+1] = '\0';
-      path_info[state].length = path_length;
+  } else if (original_length < current_length) {
+      strncpy(path_info[state].path, escaped_path, path_length);
+      path_info[state].path[path_length] = '\0';
+      path_info[state].length = original_length;
   } 
 
   msync(mem_ptr, 8192, MS_SYNC);

@@ -8410,16 +8410,13 @@ stop_fuzzing:
   int count = fb_count_states(fb_shared_mem, fb_fd);
   OKF("Visited %d states!", count);
 
-
   PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
   for (int i = 0; i < 10; i++) {
     SAYF("state: %d, length: %d, path: %s\n",
     pi_ptr[i].state, pi_ptr[i].length, pi_ptr[i].path);
   }
 
-
   exit(0);
-
 }
 
 #endif /* !AFL_LIB */
