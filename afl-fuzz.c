@@ -7951,7 +7951,7 @@ void fb_create_shared_mem() {
 
   // initialize path info memory if necessary.
   PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 50; i++) {
      PathInfo pi = { .state = 0, .length = -1};
      pi_ptr[i] = pi;
   }
