@@ -28,6 +28,10 @@
 
 #define FB_SHARED_MEM_SIZE 8192
 
+// the number of states that can be saved in the "path info" shared memory.
+#define STATE_COUNT 50  
+
+
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -7951,8 +7955,8 @@ void fb_create_shared_mem() {
 
   // initialize path info memory if necessary.
   PathInfo* pi_ptr = (PathInfo*) fb_shared_path_info;
-  for (int i = 0; i < 50; i++) {
-     PathInfo pi = { .state = 0, .length = -1};
+  for (int i = 0; i < STATE_COUNT; i++) {
+     PathInfo pi = { .state = -1, .length = -1};
      pi_ptr[i] = pi;
   }
 
@@ -7998,6 +8002,63 @@ void print_states(void* shared_mem, int fd) {
   }
 }
 
+void write_json_file(PathInfo* pi, char* filename) {
+  char buffer[200];
+  int max_len = sizeof buffer;
+
+  FILE* fp = fopen(filename, "w+");
+  if (!fp) {
+    FATAL("Couldn't open json file to write state information: {%s}", filename);
+  }
+
+  putc('[', fp);
+
+  for (int i = 0; i < STATE_COUNT; i++) {
+    if (pi[i].state != -1) {
+      // if state != -1 some state information has been saved in this slot.
+      putc('{', fp);
+
+      snprintf(buffer, max_len, "\"state\": \"%d\",", pi[i].state);
+      fputs(buffer, fp);
+
+      snprintf(buffer, max_len, "\"length\": \"%d\",", pi[i].length);
+      fputs(buffer, fp);
+
+      snprintf(buffer, max_len, "\"input\": ");
+      fputs(buffer, fp);
+
+      // if we have \x in the path array, we need to output \\x because JSON doesn't
+      // natively handle the \x escape.
+      putc('"', fp);
+      char* input = pi[i].path;
+      int path_len = strlen(input);
+      int i = 0;
+      while (i < path_len) {
+        if (input[i] == '\\' && input[i+1] == 'x') {
+          putc('\\', fp);
+          putc('\\', fp);
+          putc('x', fp);
+          i += 2;
+        } else if (input[i] == '\\' && input[i+1] == '\\') {
+          putc('\\', fp);
+          putc('\\', fp);
+          i += 2;
+        } else {
+          putc(input[i], fp);
+          i += 1;
+        }
+      }
+      putc('"', fp);
+      putc('}', fp);
+      putc(',', fp);
+    }
+  }
+  // remove trailing comma by seeking back 1 byte such that the comma
+  // is overwritten by the closing brack.
+  fseek(fp, -1L, SEEK_CUR);
+  putc(']', fp);
+  fclose(fp);
+}
 
 /* Main entry point */
 
@@ -8415,6 +8476,8 @@ stop_fuzzing:
     SAYF("state: %d, length: %d, path: %s\n",
     pi_ptr[i].state, pi_ptr[i].length, pi_ptr[i].path);
   }
+
+  write_json_file(pi_ptr, "state_info.json");
 
   exit(0);
 }
